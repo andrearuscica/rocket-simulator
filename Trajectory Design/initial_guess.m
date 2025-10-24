@@ -3,6 +3,7 @@ guess.parameter = [];
 guess.control = [];
 guess.state = [];
 
+mu = 3.986e14;
 m = 6000;
 initial_state_guess = [6378e3 0 0 0 0 0 m]'; %on earth surface
 % initial guess at constant thrusting at 45° east
@@ -10,14 +11,14 @@ T = [70e3; 70e3; 53e3]; %0.1 MN
 pitch = deg2rad([90; 45]);
 yaw = deg2rad([0;0]);
 roll = deg2rad([0;0]);
-control_time = [0; 10; 200];
+control_time = [0; 30; 210];
 
-enu_guidance = [0 0 1; 0 0 1; 1 0 0];
+enu_guidance = [0 0 1; 0 0 1; sqrt(3)/3 sqrt(3)/3 0]; % normalize
 
 %control = [T, pitch, yaw, roll, control_time];
 control = [T, enu_guidance, control_time];
 rocket_data.Isp = 300;
-options = odeset('Events', @(t,state) impact(t,state));
+options = odeset('Events', @(t,state) impact(t,state),'RelTol',1e-6,'AbsTol',1e-6);
 [tout, yout] = ode45(@(t,state) propagate_guess(t, state, control, rocket_data), [0:24*3600], initial_state_guess, options);
 
 x = yout(:,1); y = yout(:,2); z = yout(:,3);
@@ -49,6 +50,7 @@ function [xdot, control] = propagate_guess(t, state, control, rocket_data)
     m = state(7);
     
     r_vec = [x y z]';
+    v_vec = [vx vy vz]';
     mu = 3.986e14;
     g = -mu .* (r_vec) ./ (norm(r_vec)^3);
     T_program = control(:,1);
@@ -60,6 +62,11 @@ function [xdot, control] = propagate_guess(t, state, control, rocket_data)
     if m > 200
         T = interp1(control_time, T_program, t, 'nearest', 'extrap');
     else
+        T = 0;
+    end
+
+    [sma, ecc, i] = RV2COE(r_vec, v_vec, mu);
+    if sma >= (6378+200)*1e3
         T = 0;
     end
 
@@ -116,4 +123,14 @@ function [value, isterminal, direction] = impact(t, state)
     value(1) = r-6378e3;
     isterminal(1) = 1;
     direction(1) = -1;
+end
+function [value, isterminal, direction] = sma_reached(t, state)
+    mu = 3.986e14;
+    r_vec = state(1:3)';
+    v_vec = state(4:6)';
+    [sma, ecc, i] = RV2COE(r_vec, v_vec, mu);
+    value(1) = sma - (6378+10000000)*1e3;
+    isterminal(1) = 1;
+    direction(1) = 0;
+
 end
