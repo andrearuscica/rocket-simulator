@@ -13,32 +13,16 @@ yaw = deg2rad([0;0]);
 roll = deg2rad([0;0]);
 control_time = [0; 30; 210];
 
-enu_guidance = [0 0 1; 0 0 1; sqrt(3)/3 sqrt(3)/3 0]; % normalize
+enu_guidance = [0 0 1; 0 0 1; 1  3.4874 0]; % normalize
+row_norms = vecnorm(enu_guidance, 2, 2);
+enu_guidance = enu_guidance ./ row_norms;
 
-%control = [T, pitch, yaw, roll, control_time];
 control = [T, enu_guidance, control_time];
 rocket_data.Isp = 300;
 options = odeset('Events', @(t,state) impact(t,state),'RelTol',1e-6,'AbsTol',1e-6);
 [tout, yout] = ode45(@(t,state) propagate_guess(t, state, control, rocket_data), [0:24*3600], initial_state_guess, options);
 
-x = yout(:,1); y = yout(:,2); z = yout(:,3);
-h = sqrt(x.^2 + y.^2 + z.^2) - 6378e3;
-vx = yout(:,4); vy = yout(:,5); vz = yout(:,6);
-v = sqrt(vx.^2 + vy.^2 + vz.^2);
-mass = yout(:,end);
-figure;
-plotSphere(6378)
-plot3(x/1000,y/1000,z/1000, LineWidth=2)
-burnout = find(diff(mass) > -0.01, 1, "first");
-plot3(x(burnout) / 1000, y(burnout)/1000, z(burnout)/1000, 'o','LineWidth',2);
-figure;
-plot(tout,h/1000)
-figure;
-plot(tout,v*3.6)
-yline(9e3 * 3.6)
-figure;
-plot(tout, mass)
-
+process_initial_guess;
 
 function [xdot, control] = propagate_guess(t, state, control, rocket_data)
     x = state(1);
